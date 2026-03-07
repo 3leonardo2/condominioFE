@@ -5,7 +5,7 @@ import Login from './pages/Login';
 import Chat from './components/Chat';
 import ActivarCuenta from './pages/ActivarCuenta';
 import Admin from './pages/Admin';
-
+import RestablecerPassword from './pages/RestablecerPassword';
 
 function App() {
   return (
@@ -20,6 +20,8 @@ function App() {
           <Route path="activar-cuenta" element={<ActivarCuenta />} />
           <Route path="admin" element={<Admin />} />
           <Route path="caseta" element={<div className="text-2xl font-bold">Caseta</div>} />
+          <Route path="restablecer-password" element={<RestablecerPassword />} />
+
         </Route>
       </Routes>
     </Router>

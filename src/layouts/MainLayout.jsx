@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import Echo from '../echo';
 
 const MainLayout = () => {
@@ -29,12 +30,22 @@ const MainLayout = () => {
         setTimeout(() => setToast(prev => ({ ...prev, show: false })), 3000);
     };
 
-    const handleLogout = () => {
+    const handleLogout = async() => {
+        try {
+        await axios.post(
+            `${import.meta.env.VITE_API_URL}/api/logout`,
+            {},
+            { headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` } }
+        );
+    } catch {
+        // Si falla igual limpiamos localmente
+    } finally {
         localStorage.removeItem('auth_token');
         localStorage.removeItem('user_data');
         setUsuario(null);
         showToast('Sesión cerrada correctamente', 'success');
         navigate('/login');
+    }
     };
 
     // Menú según rol

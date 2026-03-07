@@ -3,6 +3,8 @@ import { useOutletContext, useNavigate, useSearchParams } from 'react-router-dom
 import { useEffect } from 'react';
 import axios from 'axios';
 
+
+
 const InputField = ({ name, type, placeholder, value, onChange, error }) => (
     <div className="flex flex-col space-y-1 w-full">
         <input
@@ -11,15 +13,16 @@ const InputField = ({ name, type, placeholder, value, onChange, error }) => (
             placeholder={placeholder}
             value={value}
             onChange={onChange}
-            className={`w-full py-2 border-b-2 outline-none transition-colors bg-transparent ${
-                error ? 'border-red-500' : 'border-gray-100 focus:border-[#2BB1D3]'
-            }`}
+            className={`w-full py-2 border-b-2 outline-none transition-colors bg-transparent ${error ? 'border-red-500' : 'border-gray-100 focus:border-[#2BB1D3]'
+                }`}
         />
         {error && (
             <span className="text-[10px] text-red-500 font-bold animate-pulse">{error}</span>
         )}
     </div>
 );
+
+
 
 const Login = () => {
     const { showToast } = useOutletContext();
@@ -29,6 +32,10 @@ const Login = () => {
     const [loading, setLoading] = useState(false);
     const [errors, setErrors] = useState({});
     const [formData, setFormData] = useState({ email: '', pass: '' });
+
+    const [mostrarRecuperacion, setMostrarRecuperacion] = useState(false);
+    const [emailRecuperacion, setEmailRecuperacion] = useState('');
+    const [loadingRecuperacion, setLoadingRecuperacion] = useState(false);
 
     // Mostrar mensaje si viene de activar cuenta
     useEffect(() => {
@@ -64,7 +71,11 @@ const Login = () => {
         try {
             const { data } = await axios.post(
                 `${import.meta.env.VITE_API_URL}/api/login`,
-                formData
+                {
+                    ...formData,
+                    dispositivo: `${navigator.platform} - ${navigator.userAgent.split(')')[0].split('(')[1]}`
+                }
+
             );
 
             // Guardar token y datos del usuario
@@ -85,6 +96,23 @@ const Login = () => {
             showToast(msg, 'error');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleRecuperacion = async (e) => {
+        e.preventDefault();
+        setLoadingRecuperacion(true);
+        try {
+            await axios.post(`${import.meta.env.VITE_API_URL}/api/recuperar-password`, {
+                email: emailRecuperacion
+            });
+            showToast('Revisa tu correo para restablecer tu contraseña', 'success');
+            setMostrarRecuperacion(false);
+        } catch (error) {
+            const msg = error.response?.data?.message || 'Error al enviar el correo';
+            showToast(msg, 'error');
+        } finally {
+            setLoadingRecuperacion(false);
         }
     };
 
@@ -133,18 +161,58 @@ const Login = () => {
                     <button
                         disabled={loading || Object.values(errors).some(e => e !== '')}
                         type="submit"
-                        className={`w-full py-4 rounded-2xl font-black text-white shadow-xl transition-all active:scale-95 mt-4 ${
-                            loading ? 'bg-gray-300' : 'bg-[#2BB1D3] hover:bg-[#1a8da9]'
-                        }`}
+                        className={`w-full py-4 rounded-2xl font-black text-white shadow-xl transition-all active:scale-95 mt-4 ${loading ? 'bg-gray-300' : 'bg-[#2BB1D3] hover:bg-[#1a8da9]'
+                            }`}
                     >
                         {loading ? 'CARGANDO...' : 'INICIAR SESIÓN'}
                     </button>
                 </form>
 
                 <div className="mt-8 pt-6 border-t border-gray-50 text-center">
-                    <p className="text-sm text-gray-400">
-                        ¿No tienes acceso? Contacta al administrador de tu condominio.
-                    </p>
+                    {mostrarRecuperacion ? (
+                        <form onSubmit={handleRecuperacion} className="space-y-4">
+                            <p className="text-sm text-gray-500 font-medium">
+                                Ingresa tu correo y te enviaremos un link para restablecer tu contraseña.
+                            </p>
+                            <input
+                                type="email"
+                                placeholder="Correo electrónico"
+                                value={emailRecuperacion}
+                                onChange={(e) => setEmailRecuperacion(e.target.value)}
+                                className="w-full py-2 border-b-2 border-gray-100 focus:border-[#2BB1D3] outline-none transition-colors bg-transparent text-sm"
+                                required
+                            />
+                            <div className="flex gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setMostrarRecuperacion(false)}
+                                    className="flex-1 py-2 rounded-xl font-bold text-gray-400 hover:text-gray-600 transition-colors text-sm"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    disabled={loadingRecuperacion}
+                                    type="submit"
+                                    className={`flex-1 py-2 rounded-xl font-bold text-white transition-all text-sm ${loadingRecuperacion ? 'bg-gray-300' : 'bg-[#2BB1D3] hover:bg-[#1a8da9]'
+                                        }`}
+                                >
+                                    {loadingRecuperacion ? 'Enviando...' : 'Enviar link'}
+                                </button>
+                            </div>
+                        </form>
+                    ) : (
+                        <div className="space-y-2">
+                            <p className="text-sm text-gray-400">
+                                ¿No tienes acceso? Contacta al administrador de tu condominio.
+                            </p>
+                            <button
+                                onClick={() => setMostrarRecuperacion(true)}
+                                className="text-sm font-semibold text-[#2BB1D3] hover:underline transition-colors"
+                            >
+                                ¿Olvidaste tu contraseña?
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
