@@ -25,7 +25,7 @@ const InputField = ({ name, type, placeholder, value, onChange, error }) => (
 
 
 const Login = () => {
-    const { showToast } = useOutletContext();
+    const { showToast, setUsuario } = useOutletContext();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
 
@@ -34,7 +34,11 @@ const Login = () => {
     const [formData, setFormData] = useState({ email: '', pass: '' });
 
     const [mostrarRecuperacion, setMostrarRecuperacion] = useState(false);
+    const [pasoRecuperacion, setPasoRecuperacion] = useState(1); // 1=email, 2=codigo+pass
     const [emailRecuperacion, setEmailRecuperacion] = useState('');
+    const [codigoRecuperacion, setCodigoRecuperacion] = useState('');
+    const [passNueva, setPassNueva] = useState('');
+    const [passNuevaConfirmacion, setPassNuevaConfirmacion] = useState('');
     const [loadingRecuperacion, setLoadingRecuperacion] = useState(false);
 
     // Mostrar mensaje si viene de activar cuenta
@@ -99,17 +103,66 @@ const Login = () => {
         }
     };
 
-    const handleRecuperacion = async (e) => {
+    const handleSolicitarCodigo = async (e) => {
         e.preventDefault();
         setLoadingRecuperacion(true);
         try {
             await axios.post(`${import.meta.env.VITE_API_URL}/api/recuperar-password`, {
                 email: emailRecuperacion
             });
-            showToast('Revisa tu correo para restablecer tu contraseña', 'success');
-            setMostrarRecuperacion(false);
+            showToast('Código enviado, revisa tu correo', 'success');
+            setPasoRecuperacion(2);
         } catch (error) {
-            const msg = error.response?.data?.message || 'Error al enviar el correo';
+            const msg = error.response?.data?.message || 'Error al enviar el código';
+            showToast(msg, 'error');
+        } finally {
+            setLoadingRecuperacion(false);
+        }
+    };
+    const handleVerificarCodigo = async (e) => {
+        e.preventDefault();
+        setLoadingRecuperacion(true);
+        try {
+            await axios.post(`${import.meta.env.VITE_API_URL}/api/verificar-codigo`, {
+                email: emailRecuperacion,
+                codigo: codigoRecuperacion,
+            });
+            // Código válido — avanzar al paso 3
+            setPasoRecuperacion(3);
+        } catch (error) {
+            const msg = error.response?.data?.message || 'Código incorrecto o expirado';
+            showToast(msg, 'error');
+        } finally {
+            setLoadingRecuperacion(false);
+        }
+    };
+    const handleRestablecerConCodigo = async (e) => {
+        e.preventDefault();
+        if (passNueva.length < 6) return showToast('Mínimo 6 caracteres', 'error');
+        if (passNueva !== passNuevaConfirmacion) return showToast('Las contraseñas no coinciden', 'error');
+
+        setLoadingRecuperacion(true);
+        try {
+            await axios.post(`${import.meta.env.VITE_API_URL}/api/restablecer-password`, {
+                email: emailRecuperacion,
+                codigo: codigoRecuperacion,
+                pass_nueva: passNueva,
+                pass_nueva_confirmation: passNuevaConfirmacion,
+            });
+            showToast('¡Contraseña actualizada! Inicia sesión', 'success');
+            // Limpiar sesión local por si estaba logueado
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('user_data');
+            setUsuario(null);
+            // Resetear estado
+            setMostrarRecuperacion(false);
+            setPasoRecuperacion(1);
+            setEmailRecuperacion('');
+            setCodigoRecuperacion('');
+            setPassNueva('');
+            setPassNuevaConfirmacion('');
+        } catch (error) {
+            const msg = error.response?.data?.message || 'Código incorrecto o expirado';
             showToast(msg, 'error');
         } finally {
             setLoadingRecuperacion(false);
@@ -170,36 +223,121 @@ const Login = () => {
 
                 <div className="mt-8 pt-6 border-t border-gray-50 text-center">
                     {mostrarRecuperacion ? (
-                        <form onSubmit={handleRecuperacion} className="space-y-4">
-                            <p className="text-sm text-gray-500 font-medium">
-                                Ingresa tu correo y te enviaremos un link para restablecer tu contraseña.
-                            </p>
-                            <input
-                                type="email"
-                                placeholder="Correo electrónico"
-                                value={emailRecuperacion}
-                                onChange={(e) => setEmailRecuperacion(e.target.value)}
-                                className="w-full py-2 border-b-2 border-gray-100 focus:border-[#2BB1D3] outline-none transition-colors bg-transparent text-sm"
-                                required
-                            />
-                            <div className="flex gap-3">
-                                <button
-                                    type="button"
-                                    onClick={() => setMostrarRecuperacion(false)}
-                                    className="flex-1 py-2 rounded-xl font-bold text-gray-400 hover:text-gray-600 transition-colors text-sm"
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    disabled={loadingRecuperacion}
-                                    type="submit"
-                                    className={`flex-1 py-2 rounded-xl font-bold text-white transition-all text-sm ${loadingRecuperacion ? 'bg-gray-300' : 'bg-[#2BB1D3] hover:bg-[#1a8da9]'
-                                        }`}
-                                >
-                                    {loadingRecuperacion ? 'Enviando...' : 'Enviar link'}
-                                </button>
-                            </div>
-                        </form>
+                        <div className="space-y-4">
+
+                            {/* PASO 1 — Solicitar código */}
+                            {pasoRecuperacion === 1 && (
+                                <form onSubmit={handleSolicitarCodigo} className="space-y-4">
+                                    <p className="text-sm text-gray-500 font-medium">
+                                        Ingresa tu correo y te enviaremos un código de 6 dígitos.
+                                    </p>
+                                    <input
+                                        type="email"
+                                        placeholder="Correo electrónico"
+                                        value={emailRecuperacion}
+                                        onChange={(e) => setEmailRecuperacion(e.target.value)}
+                                        className="w-full py-2 border-b-2 border-gray-100 focus:border-[#2BB1D3] outline-none transition-colors bg-transparent text-sm"
+                                        required
+                                    />
+                                    <div className="flex gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => { setMostrarRecuperacion(false); setPasoRecuperacion(1); }}
+                                            className="flex-1 py-2 rounded-xl font-bold text-gray-400 hover:text-gray-600 transition-colors text-sm"
+                                        >
+                                            Cancelar
+                                        </button>
+                                        <button
+                                            disabled={loadingRecuperacion}
+                                            type="submit"
+                                            className={`flex-1 py-2 rounded-xl font-bold text-white transition-all text-sm ${loadingRecuperacion ? 'bg-gray-300' : 'bg-[#2BB1D3] hover:bg-[#1a8da9]'
+                                                }`}
+                                        >
+                                            {loadingRecuperacion ? 'Enviando...' : 'Enviar código'}
+                                        </button>
+                                    </div>
+                                </form>
+                            )}
+
+                            {/* PASO 2 — Validar código */}
+                            {pasoRecuperacion === 2 && (
+                                <form onSubmit={handleVerificarCodigo} className="space-y-4">
+                                    <p className="text-sm text-gray-500 font-medium">
+                                        Ingresa el código que enviamos a <strong>{emailRecuperacion}</strong>.
+                                    </p>
+                                    <input
+                                        type="text"
+                                        placeholder="000000"
+                                        value={codigoRecuperacion}
+                                        onChange={(e) => setCodigoRecuperacion(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                        className="w-full py-2 border-b-2 border-gray-100 focus:border-[#2BB1D3] outline-none transition-colors bg-transparent text-center tracking-widest font-bold text-lg"
+                                        maxLength={6}
+                                        required
+                                    />
+                                    <div className="flex gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => setPasoRecuperacion(1)}
+                                            className="flex-1 py-2 rounded-xl font-bold text-gray-400 hover:text-gray-600 transition-colors text-sm"
+                                        >
+                                            Atrás
+                                        </button>
+                                        <button
+                                            disabled={loadingRecuperacion || codigoRecuperacion.length !== 6}
+                                            type="submit"
+                                            className={`flex-1 py-2 rounded-xl font-bold text-white transition-all text-sm ${loadingRecuperacion || codigoRecuperacion.length !== 6
+                                                ? 'bg-gray-300' : 'bg-[#2BB1D3] hover:bg-[#1a8da9]'
+                                                }`}
+                                        >
+                                            {loadingRecuperacion ? 'Verificando...' : 'Verificar código'}
+                                        </button>
+                                    </div>
+                                </form>
+                            )}
+
+                            {/* PASO 3 — Nueva contraseña */}
+                            {pasoRecuperacion === 3 && (
+                                <form onSubmit={handleRestablecerConCodigo} className="space-y-4">
+                                    <p className="text-sm text-gray-500 font-medium">
+                                        Elige una nueva contraseña segura.
+                                    </p>
+                                    <input
+                                        type="password"
+                                        placeholder="Nueva contraseña"
+                                        value={passNueva}
+                                        onChange={(e) => setPassNueva(e.target.value)}
+                                        className="w-full py-2 border-b-2 border-gray-100 focus:border-[#2BB1D3] outline-none transition-colors bg-transparent text-sm"
+                                        required
+                                    />
+                                    <input
+                                        type="password"
+                                        placeholder="Confirmar contraseña"
+                                        value={passNuevaConfirmacion}
+                                        onChange={(e) => setPassNuevaConfirmacion(e.target.value)}
+                                        className="w-full py-2 border-b-2 border-gray-100 focus:border-[#2BB1D3] outline-none transition-colors bg-transparent text-sm"
+                                        required
+                                    />
+                                    <div className="flex gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => setPasoRecuperacion(2)}
+                                            className="flex-1 py-2 rounded-xl font-bold text-gray-400 hover:text-gray-600 transition-colors text-sm"
+                                        >
+                                            Atrás
+                                        </button>
+                                        <button
+                                            disabled={loadingRecuperacion}
+                                            type="submit"
+                                            className={`flex-1 py-2 rounded-xl font-bold text-white transition-all text-sm ${loadingRecuperacion ? 'bg-gray-300' : 'bg-[#2BB1D3] hover:bg-[#1a8da9]'
+                                                }`}
+                                        >
+                                            {loadingRecuperacion ? 'Guardando...' : 'Cambiar contraseña'}
+                                        </button>
+                                    </div>
+                                </form>
+                            )}
+
+                        </div>
                     ) : (
                         <div className="space-y-2">
                             <p className="text-sm text-gray-400">
